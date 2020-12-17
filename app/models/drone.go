@@ -7,12 +7,7 @@ import (
 	"gobot.io/x/gobot/platforms/dji/tello"
 	"gocv.io/x/gocv"
 	"golang.org/x/sync/semaphore"
-	"image"
-	"image/color"
 	"io"
-	"io/ioutil"
-	"log"
-	"net"
 	"os/exec"
 	"strconv"
 	"time"
@@ -21,8 +16,8 @@ import (
 const (
 	DefaultSpeed      = 10
 	WaitDroneStartSec = 5
-	frameX            = 960 / 3
-	frameY            = 720 / 3
+	frameX            = 960
+	frameY            = 720
 	frameCenterX      = frameX / 2
 	frameCenterY      = frameY / 2
 	frameArea         = frameX * frameY
@@ -44,25 +39,26 @@ type DroneManager struct {
 	isSnapShot bool
 }
 
-func NewDroneManager() *DroneManager{
+func NewDroneManager(){
+
 	drone := tello.NewDriver("8889")
-	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0", "-pix_fmt", "bgr24",
-		"-s", strconv.Itoa(960)+"x"+strconv.Itoa(720), "-f", "rawvideo", "pipe:1")
+	fmt.Printf("%T",drone)
+
+	window := gocv.NewWindow("Tello")
+
+	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0",
+		"-pix_fmt", "bgr24", "-s", strconv.Itoa(frameX)+"x"+strconv.Itoa(frameY), "-f", "rawvideo", "pipe:1")
 	ffmpegIn, _ := ffmpeg.StdinPipe()
 	ffmpegOut, _ := ffmpeg.StdoutPipe()
 
-
-
-	droneManager := &DroneManager{
-		Driver:               drone,
-		Speed:                DefaultSpeed,
-		ffmpegIn:             ffmpegIn,
-		ffmpegOut:            ffmpegOut,
-		Stream:               mjpeg.NewStream(),
-		faceDetectTrackingOn: false,
-	}
-	work := func(){
+	work := func() {
+		if err := ffmpeg.Start(); err != nil {
+			fmt.Println(err)
+			return
+		}
+		// telloに接続を確認して、Macのビデオを起動
 		drone.On(tello.ConnectedEvent, func(data interface{}) {
+			fmt.Println("Telloへ接続")
 			drone.StartVideo()
 			drone.SetVideoEncoderRate(tello.VideoBitRateAuto)
 			drone.SetExposure(0)
@@ -70,78 +66,74 @@ func NewDroneManager() *DroneManager{
 			gobot.Every(100*time.Millisecond, func() {
 				drone.StartVideo()
 			})
-
-			//droneManager.StreamVideo()
 		})
-		drone.On(tello.VideoFrameEvent, func(data interface{}){
+
+		//FFMPEG functionとvideoデータをつなぐ
+		drone.On(tello.VideoFrameEvent, func(data interface{}) {
 			pkt := data.([]byte)
 			if _, err := ffmpegIn.Write(pkt); err != nil {
-				log.Println(err)
+				fmt.Println(err)
 			}
 		})
 	}
-	robot := gobot.NewRobot("tello", []gobot.Connection{}, []gobot.Device{drone}, work)
-	go robot.Start()
-	time.Sleep(5 * time.Second)
-	return droneManager
-}
 
-func (d *DroneManager)StreamVideo() {
-	go func(d *DroneManager) {
-		classifier := gocv.NewCascadeClassifier()
-		defer classifier.Close()
-		if !classifier.Load(faceDetectXMLFile) {
-			log.Printf("Error reading cascade file: %v\n", faceDetectXMLFile)
-			return
-		}
-		blue := color.RGBA{0, 0, 255, 0}
+	robot := gobot.NewRobot("tello",
+		[]gobot.Connection{},
+		[]gobot.Device{drone},
+		work,
+	)
 
+	robot.Start(false)
+
+	go func() {
 		for {
-			buf := make([]byte, frameSize)
-			if _, err := io.ReadFull(d.ffmpegOut, buf); err != nil {
-				log.Println(err)
-			}
-			img, _ := gocv.NewMatFromBytes(frameY, frameX, gocv.MatTypeCV8UC3, buf)
-
-			if img.Empty() {
-				continue
-			}
-
-			if d.faceDetectTrackingOn {
-				rects := classifier.DetectMultiScale(img)
-				log.Printf("found %d faces\n", len(rects))
-
-				if len(rects) == 0 {
-					d.Hover()
-				}
-				for _, r := range rects {
-					gocv.Rectangle(&img, r, blue, 3)
-					pt := image.Pt(r.Max.X, r.Min.Y-5)
-					gocv.PutText(&img, "Human", pt, gocv.FontHersheyPlain, 1.2, blue, 2)
-
-				}
-			}
-
-			jpegBuf, _ := gocv.IMEncode(".jpg", img)
-			if d.isSnapShot {
-				backupFileName := snapshotsFolder + time.Now().Format(time.RFC3339) + ".jpg"
-				ioutil.WriteFile(backupFileName, jpegBuf, 0644)
-				snapshotFileName := snapshotsFolder + "snapshot.jpg"
-				ioutil.WriteFile(snapshotFileName, jpegBuf, 0644)
-				d.isSnapShot = false
-			}
-			d.Stream.UpdateJPEG(jpegBuf)
+			Manual(drone)
 		}
-	}(d)
+	}()
+
+	// ffmpegの出力をMac向けに変換
+	for {
+		buf := make([]byte, frameSize)
+		if _, err := io.ReadFull(ffmpegOut, buf); err != nil {
+			fmt.Println(err)
+			continue
+		}
+		img, _ := gocv.NewMatFromBytes(frameY, frameX, gocv.MatTypeCV8UC3, buf)
+		if img.Empty() {
+			continue
+		}
+
+		window.IMShow(img)
+		if window.WaitKey(1) >= 0 {
+			break
+		}
+	}
 }
 
-func Manual(){
+func Manual(drone *tello.Driver){
+
 	var operation string
 
-	conn, _ := net.Dial("udp","192.168.10.1:8889")
-	conn.Write([]byte("command"))
-		for {
-			fmt.Scan(&operation)
-			conn.Write([]byte(operation))
-		}
+	fmt.Println("Manual operation Can be entered")
+	fmt.Scan(&operation)
+
+	switch operation {
+	case "takeoff":
+		drone.TakeOff()
+	case "land":
+		drone.Land()
+	case "rflip":
+		drone.RightFlip()
+	case "lflip":
+		drone.LeftFlip()
+	case "fflip":
+		drone.FrontFlip()
+	case "bflip":
+		drone.BackFlip()
+	case "throw":
+		drone.ThrowTakeOff()
+	default:
+		fmt.Println("Command ERROR")
+	}
+
 }
