@@ -1,13 +1,20 @@
-{{ template "layout.html"}}
-
-{{ define "content"}}
+{{ template "layout.html"}} {{ define "content"}}
+<script>
+    function sendCommand(command, params={}){
+        params['command'] = command
+        $.post("/api/command/", params).done(function (json){
+            console.log({action: 'sendCommand', params: params, json: json, status: 'success'})
+        }, 'json').fail(function (json) {
+            console.log({action: 'sendCommand', params: params, json: json, status: 'fail'})
+        }, 'json')
+    }
+</script>
 <div align="center">
-    <h1>Drone World</h1>
-    <img width="50%" height="10%" src="/static/image/logomoji.png">
+    <h1>Drone World</h1> <img width="50%" height="10%" src="/static/image/logomoji.png"><br><br>
+    <td align="right"><b>Manual Controller</b></td><br>
+    <form action="/" method="post">
+        <input type="text" name="operation" size="30" maxlength="20" height="100">
+        <input type="submit" value="Execute">
+    </form>
 </div>
-<img src="/video/streaming">
-<ul data-role="listview">
-    <li><a href="/controller/">Controller</a></li>
-    <li><a href="/games/shake/">Shake Game</a></li>
-</ul>
-{{ end }}
+<ul data-role="listview"> </ul> {{ end }}

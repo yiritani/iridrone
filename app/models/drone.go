@@ -58,7 +58,7 @@ func NewDroneManager(){
 		}
 		// telloに接続を確認して、Macのビデオを起動
 		drone.On(tello.ConnectedEvent, func(data interface{}) {
-			fmt.Println("Telloへ接続")
+			fmt.Println("Connected Tello")
 			drone.StartVideo()
 			drone.SetVideoEncoderRate(tello.VideoBitRateAuto)
 			drone.SetExposure(0)
@@ -66,6 +66,8 @@ func NewDroneManager(){
 			gobot.Every(100*time.Millisecond, func() {
 				drone.StartVideo()
 			})
+
+			//droneManager.StreamVideo()
 		})
 
 		//FFMPEG functionとvideoデータをつなぐ
