@@ -7,7 +7,11 @@ import (
 	"gobot.io/x/gobot/platforms/dji/tello"
 	"gocv.io/x/gocv"
 	"golang.org/x/sync/semaphore"
+	"image"
+	"image/color"
 	"io"
+	"io/ioutil"
+	"log"
 	"os/exec"
 	"strconv"
 	"time"
@@ -16,8 +20,8 @@ import (
 const (
 	DefaultSpeed      = 10
 	WaitDroneStartSec = 5
-	frameX            = 960
-	frameY            = 720
+	frameX            = 480
+	frameY            = 360
 	frameCenterX      = frameX / 2
 	frameCenterY      = frameY / 2
 	frameArea         = frameX * frameY
@@ -39,17 +43,26 @@ type DroneManager struct {
 	isSnapShot bool
 }
 
-func NewDroneManager(){
+func NewDroneManager() *DroneManager {
 
 	drone := tello.NewDriver("8889")
 	fmt.Printf("%T",drone)
 
-	window := gocv.NewWindow("Tello")
+	//window := gocv.NewWindow("Tello")
 
 	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0",
 		"-pix_fmt", "bgr24", "-s", strconv.Itoa(frameX)+"x"+strconv.Itoa(frameY), "-f", "rawvideo", "pipe:1")
 	ffmpegIn, _ := ffmpeg.StdinPipe()
 	ffmpegOut, _ := ffmpeg.StdoutPipe()
+
+	droneManager := &DroneManager{
+		Driver:               drone,
+		Speed:                DefaultSpeed,
+		isPatrolling:         false,
+		ffmpegIn:             ffmpegIn,
+		ffmpegOut:            ffmpegOut,
+		Stream:               mjpeg.NewStream(),
+	}
 
 	work := func() {
 		if err := ffmpeg.Start(); err != nil {
@@ -67,7 +80,7 @@ func NewDroneManager(){
 				drone.StartVideo()
 			})
 
-			//droneManager.StreamVideo()
+			droneManager.StreamVideo()
 		})
 
 		//FFMPEG functionとvideoデータをつなぐ
@@ -85,31 +98,84 @@ func NewDroneManager(){
 		work,
 	)
 
-	robot.Start(false)
+	go robot.Start(false)
+	time.Sleep(WaitDroneStartSec * time.Second)
 
-	go func() {
-		for {
-			Manual(drone)
-		}
-	}()
+	//go func() {
+	//	for {
+	//		Manual(drone)
+	//	}
+	//}()
 
 	// ffmpegの出力をMac向けに変換
-	for {
-		buf := make([]byte, frameSize)
-		if _, err := io.ReadFull(ffmpegOut, buf); err != nil {
-			fmt.Println(err)
-			continue
-		}
-		img, _ := gocv.NewMatFromBytes(frameY, frameX, gocv.MatTypeCV8UC3, buf)
-		if img.Empty() {
-			continue
-		}
+	//for {
+	//	buf := make([]byte, frameSize)
+	//	if _, err := io.ReadFull(ffmpegOut, buf); err != nil {
+	//		fmt.Println(err)
+	//		continue
+	//	}
+	//	img, _ := gocv.NewMatFromBytes(frameY, frameX, gocv.MatTypeCV8UC3, buf)
+	//	if img.Empty() {
+	//		continue
+	//	}
+	//
+	//	window.IMShow(img)
+	//	if window.WaitKey(1) >= 0 {
+	//		break
+	//	}
+	//}
+	return droneManager
+}
 
-		window.IMShow(img)
-		if window.WaitKey(1) >= 0 {
-			break
+func (d *DroneManager) StreamVideo() {
+	go func(d *DroneManager) {
+		fmt.Println("streamVideo")
+		classifier := gocv.NewCascadeClassifier()
+		defer classifier.Close()
+		if !classifier.Load(faceDetectXMLFile) {
+			log.Printf("Error reading cascade file: %v\n", faceDetectXMLFile)
+			return
 		}
-	}
+		blue := color.RGBA{0, 0, 255, 0}
+
+		for {
+			buf := make([]byte, frameSize)
+			if _, err := io.ReadFull(d.ffmpegOut, buf); err != nil {
+				log.Println(err)
+			}
+			img, _ := gocv.NewMatFromBytes(frameY, frameX, gocv.MatTypeCV8UC3, buf)
+
+			if img.Empty() {
+				continue
+			}
+
+			if d.faceDetectTrackingOn {
+				rects := classifier.DetectMultiScale(img)
+				log.Printf("found %d faces\n", len(rects))
+
+				if len(rects) == 0 {
+					d.Hover()
+				}
+				for _, r := range rects {
+					gocv.Rectangle(&img, r, blue, 3)
+					pt := image.Pt(r.Max.X, r.Min.Y-5)
+					gocv.PutText(&img, "Human", pt, gocv.FontHersheyPlain, 1.2, blue, 2)
+
+					break
+				}
+			}
+
+			jpegBuf, _ := gocv.IMEncode(".jpg", img)
+			if d.isSnapShot {
+				backupFileName := snapshotsFolder + time.Now().Format(time.RFC3339) + ".jpg"
+				ioutil.WriteFile(backupFileName, jpegBuf, 0644)
+				snapshotFileName := snapshotsFolder + "snapshot.jpg"
+				ioutil.WriteFile(snapshotFileName, jpegBuf, 0644)
+				d.isSnapShot = false
+			}
+			d.Stream.UpdateJPEG(jpegBuf)
+		}
+	}(d)
 }
 
 func Manual(drone *tello.Driver){
