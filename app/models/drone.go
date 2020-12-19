@@ -36,6 +36,7 @@ type DroneManager struct {
 	ffmpegOut            io.ReadCloser
 	Stream               *mjpeg.Stream
 	faceDetectTrackingOn bool
+	isSnapShot           bool
 }
 
 func NewDroneManager() *DroneManager {
@@ -158,6 +159,9 @@ func (d *DroneManager) StreamVideo() {
 					break
 				}
 			}
+
+			jpegBuf, _ := gocv.IMEncode(".jpg", img)
+			d.Stream.UpdateJPEG(jpegBuf)
 		}
 	}(d)
 }
