@@ -59,8 +59,8 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Build.go build webCamera.go" />
       <item itemvalue="Go Build.go build iridrone" />
+      <item itemvalue="Go Build.go build webCamera.go" />
     </list>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
