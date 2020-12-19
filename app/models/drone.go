@@ -10,7 +10,6 @@ import (
 	"image"
 	"image/color"
 	"io"
-	"io/ioutil"
 	"log"
 	"os/exec"
 	"strconv"
@@ -22,12 +21,9 @@ const (
 	WaitDroneStartSec = 5
 	frameX            = 480
 	frameY            = 360
-	frameCenterX      = frameX / 2
-	frameCenterY      = frameY / 2
 	frameArea         = frameX * frameY
 	frameSize         = frameArea * 3
 	faceDetectXMLFile = "./app/models/default.xml"
-	snapshotsFolder = "./static/image/snapshots/"
 )
 
 type DroneManager struct {
@@ -40,13 +36,12 @@ type DroneManager struct {
 	ffmpegOut            io.ReadCloser
 	Stream               *mjpeg.Stream
 	faceDetectTrackingOn bool
-	isSnapShot bool
 }
 
 func NewDroneManager() *DroneManager {
 
 	drone := tello.NewDriver("8889")
-	fmt.Printf("%T",drone)
+	fmt.Printf("%T", drone)
 
 	//window := gocv.NewWindow("Tello")
 
@@ -56,12 +51,12 @@ func NewDroneManager() *DroneManager {
 	ffmpegOut, _ := ffmpeg.StdoutPipe()
 
 	droneManager := &DroneManager{
-		Driver:               drone,
-		Speed:                DefaultSpeed,
-		isPatrolling:         false,
-		ffmpegIn:             ffmpegIn,
-		ffmpegOut:            ffmpegOut,
-		Stream:               mjpeg.NewStream(),
+		Driver:       drone,
+		Speed:        DefaultSpeed,
+		isPatrolling: false,
+		ffmpegIn:     ffmpegIn,
+		ffmpegOut:    ffmpegOut,
+		Stream:       mjpeg.NewStream(),
 	}
 
 	work := func() {
@@ -69,7 +64,7 @@ func NewDroneManager() *DroneManager {
 			fmt.Println(err)
 			return
 		}
-		// telloに接続を確認して、Macのビデオを起動
+		// ドローン接続
 		drone.On(tello.ConnectedEvent, func(data interface{}) {
 			fmt.Println("Connected Tello")
 			drone.StartVideo()
@@ -129,7 +124,6 @@ func NewDroneManager() *DroneManager {
 
 func (d *DroneManager) StreamVideo() {
 	go func(d *DroneManager) {
-		fmt.Println("streamVideo")
 		classifier := gocv.NewCascadeClassifier()
 		defer classifier.Close()
 		if !classifier.Load(faceDetectXMLFile) {
@@ -164,44 +158,6 @@ func (d *DroneManager) StreamVideo() {
 					break
 				}
 			}
-
-			jpegBuf, _ := gocv.IMEncode(".jpg", img)
-			if d.isSnapShot {
-				backupFileName := snapshotsFolder + time.Now().Format(time.RFC3339) + ".jpg"
-				ioutil.WriteFile(backupFileName, jpegBuf, 0644)
-				snapshotFileName := snapshotsFolder + "snapshot.jpg"
-				ioutil.WriteFile(snapshotFileName, jpegBuf, 0644)
-				d.isSnapShot = false
-			}
-			d.Stream.UpdateJPEG(jpegBuf)
 		}
 	}(d)
-}
-
-func Manual(drone *tello.Driver){
-
-	var operation string
-
-	fmt.Println("Manual operation Can be entered")
-	fmt.Scan(&operation)
-
-	switch operation {
-	case "takeoff":
-		drone.TakeOff()
-	case "land":
-		drone.Land()
-	case "rflip":
-		drone.RightFlip()
-	case "lflip":
-		drone.LeftFlip()
-	case "fflip":
-		drone.FrontFlip()
-	case "bflip":
-		drone.BackFlip()
-	case "throw":
-		drone.ThrowTakeOff()
-	default:
-		fmt.Println("Command ERROR")
-	}
-
 }

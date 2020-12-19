@@ -8,7 +8,7 @@ import (
 )
 
 var appContext struct {
-	DroneManager   *models.DroneManager
+	DroneManager *models.DroneManager
 }
 
 func init() {
@@ -22,7 +22,7 @@ func getTemplate(temp string) (*template.Template, error) {
 func viewIndexHandler(w http.ResponseWriter, r *http.Request) {
 	drone := appContext.DroneManager
 
-	fmt.Println("viewIndex")
+	//fmt.Println("viewIndex")
 
 	t, _ := getTemplate("app/views/index.html")
 	err := t.Execute(w, nil)
@@ -34,29 +34,27 @@ func viewIndexHandler(w http.ResponseWriter, r *http.Request) {
 	Manual(operation, drone)
 }
 
-func Manual(operation string, drone *models.DroneManager){
-	//var operation string
-		fmt.Println("Manual operation Can be entered")
-		//fmt.Scan(&operation)
+func Manual(operation string, drone *models.DroneManager) {
+	fmt.Println("Manual operation Can be entered")
 
-		switch operation {
-		case "takeoff":
-			drone.TakeOff()
-		case "land":
-			drone.Land()
-		case "rflip":
-			drone.RightFlip()
-		case "lflip":
-			drone.LeftFlip()
-		case "fflip":
-			drone.FrontFlip()
-		case "bflip":
-			drone.BackFlip()
-		case "throw":
-			drone.ThrowTakeOff()
-		default:
-			fmt.Println("Command ERROR")
-		}
+	switch operation {
+	case "takeoff":
+		drone.TakeOff()
+	case "land":
+		drone.Land()
+	case "rflip":
+		drone.RightFlip()
+	case "lflip":
+		drone.LeftFlip()
+	case "fflip":
+		drone.FrontFlip()
+	case "bflip":
+		drone.BackFlip()
+	case "throw":
+		drone.ThrowTakeOff()
+		//default:
+		//	fmt.Println("Command ERROR")
+	}
 }
 
 func StartWebServer() {
