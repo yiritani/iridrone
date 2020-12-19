@@ -6,6 +6,4 @@ import (
 
 func main() {
 	controller.StartWebServer()
-	//models.NewDroneManager()
-	//models.Manual()
 }

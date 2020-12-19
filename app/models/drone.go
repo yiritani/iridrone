@@ -46,8 +46,7 @@ func NewDroneManager() *DroneManager {
 
 	//window := gocv.NewWindow("Tello")
 
-	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0",
-		"-pix_fmt", "bgr24", "-s", strconv.Itoa(frameX)+"x"+strconv.Itoa(frameY), "-f", "rawvideo", "pipe:1")
+	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0",		"-pix_fmt", "bgr24", "-s", strconv.Itoa(frameX)+"x"+strconv.Itoa(frameY), "-f", "rawvideo", "pipe:1")
 	ffmpegIn, _ := ffmpeg.StdinPipe()
 	ffmpegOut, _ := ffmpeg.StdoutPipe()
 

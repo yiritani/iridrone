@@ -35,13 +35,11 @@ func viewIndexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Manual(operation string, drone *models.DroneManager) {
-	fmt.Println("Manual operation Can be entered")
+	//fmt.Println("Manual operation Can be entered")
 
 	switch operation {
 	case "takeoff":
 		drone.TakeOff()
-	case "land":
-		drone.Land()
 	case "rflip":
 		drone.RightFlip()
 	case "lflip":
@@ -52,6 +50,10 @@ func Manual(operation string, drone *models.DroneManager) {
 		drone.BackFlip()
 	case "throw":
 		drone.ThrowTakeOff()
+	case "bounce":
+		drone.Bounce()
+	case "land":
+		drone.Land()
 		//default:
 		//	fmt.Println("Command ERROR")
 	}
