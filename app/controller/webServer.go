@@ -22,8 +22,6 @@ func getTemplate(temp string) (*template.Template, error) {
 func viewIndexHandler(w http.ResponseWriter, r *http.Request) {
 	drone := appContext.DroneManager
 
-	//fmt.Println("viewIndex")
-
 	t, _ := getTemplate("app/views/index.html")
 	err := t.Execute(w, nil)
 	if err != nil {
@@ -35,7 +33,6 @@ func viewIndexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Manual(operation string, drone *models.DroneManager) {
-	//fmt.Println("Manual operation Can be entered")
 
 	switch operation {
 	case "takeoff":
@@ -54,8 +51,6 @@ func Manual(operation string, drone *models.DroneManager) {
 		drone.Bounce()
 	case "land":
 		drone.Land()
-		//default:
-		//	fmt.Println("Command ERROR")
 	}
 }
 

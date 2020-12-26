@@ -8,7 +8,6 @@ import (
 	"gocv.io/x/gocv"
 	"golang.org/x/sync/semaphore"
 	"image"
-	"image/color"
 	"io"
 	"log"
 	"os/exec"
@@ -35,18 +34,14 @@ type DroneManager struct {
 	ffmpegIn             io.WriteCloser
 	ffmpegOut            io.ReadCloser
 	Stream               *mjpeg.Stream
-	faceDetectTrackingOn bool
-	isSnapShot           bool
 }
 
 func NewDroneManager() *DroneManager {
 
 	drone := tello.NewDriver("8889")
-	fmt.Printf("%T", drone)
 
-	//window := gocv.NewWindow("Tello")
-
-	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0",		"-pix_fmt", "bgr24", "-s", strconv.Itoa(frameX)+"x"+strconv.Itoa(frameY), "-f", "rawvideo", "pipe:1")
+	ffmpeg := exec.Command("ffmpeg", "-hwaccel", "auto", "-hwaccel_device", "opencl", "-i", "pipe:0", "-pix_fmt", "bgr24",
+		"-s", strconv.Itoa(frameX)+"x"+strconv.Itoa(frameY), "-f", "rawvideo", "pipe:1")
 	ffmpegIn, _ := ffmpeg.StdinPipe()
 	ffmpegOut, _ := ffmpeg.StdoutPipe()
 
@@ -64,7 +59,7 @@ func NewDroneManager() *DroneManager {
 			fmt.Println(err)
 			return
 		}
-		// ドローン接続
+		//Drone connection
 		drone.On(tello.ConnectedEvent, func(data interface{}) {
 			fmt.Println("Connected Tello")
 			drone.StartVideo()
@@ -78,7 +73,6 @@ func NewDroneManager() *DroneManager {
 			droneManager.StreamVideo()
 		})
 
-		//FFMPEG functionとvideoデータをつなぐ
 		drone.On(tello.VideoFrameEvent, func(data interface{}) {
 			pkt := data.([]byte)
 			if _, err := ffmpegIn.Write(pkt); err != nil {
@@ -87,38 +81,10 @@ func NewDroneManager() *DroneManager {
 		})
 	}
 
-	robot := gobot.NewRobot("tello",
-		[]gobot.Connection{},
-		[]gobot.Device{drone},
-		work,
-	)
-
+	robot := gobot.NewRobot("tello", []gobot.Connection{}, []gobot.Device{drone}, work)
 	go robot.Start(false)
 	time.Sleep(WaitDroneStartSec * time.Second)
 
-	//go func() {
-	//	for {
-	//		Manual(drone)
-	//	}
-	//}()
-
-	// ffmpegの出力をMac向けに変換
-	//for {
-	//	buf := make([]byte, frameSize)
-	//	if _, err := io.ReadFull(ffmpegOut, buf); err != nil {
-	//		fmt.Println(err)
-	//		continue
-	//	}
-	//	img, _ := gocv.NewMatFromBytes(frameY, frameX, gocv.MatTypeCV8UC3, buf)
-	//	if img.Empty() {
-	//		continue
-	//	}
-	//
-	//	window.IMShow(img)
-	//	if window.WaitKey(1) >= 0 {
-	//		break
-	//	}
-	//}
 	return droneManager
 }
 
@@ -130,7 +96,6 @@ func (d *DroneManager) StreamVideo() {
 			log.Printf("Error reading cascade file: %v\n", faceDetectXMLFile)
 			return
 		}
-		blue := color.RGBA{0, 0, 255, 0}
 
 		for {
 			buf := make([]byte, frameSize)
@@ -143,23 +108,26 @@ func (d *DroneManager) StreamVideo() {
 				continue
 			}
 
-			if d.faceDetectTrackingOn {
-				rects := classifier.DetectMultiScale(img)
-				log.Printf("found %d faces\n", len(rects))
+			rects := classifier.DetectMultiScale(img)
+			log.Printf("found %d faces\n", len(rects))
 
-				if len(rects) == 0 {
-					d.Hover()
-				}
-				for _, r := range rects {
-					gocv.Rectangle(&img, r, blue, 3)
-					pt := image.Pt(r.Max.X, r.Min.Y-5)
-					gocv.PutText(&img, "Human", pt, gocv.FontHersheyPlain, 1.2, blue, 2)
+			if len(rects) == 0 {
+				d.Hover()
+			}
+			for _, r := range rects {
+				//Ordinary frame
+				//gocv.Rectangle(&img, r, blue, 3)
+				//pt := image.Pt(r.Max.X, r.Min.Y-5)
+				//gocv.PutText(&img, "Human", pt, gocv.FontHersheyPlain, 1.2, blue, 2)
 
-					break
-				}
+				//mosaic
+				imgFace := img.Region(r)
+				gocv.GaussianBlur(imgFace, &imgFace, image.Pt(75, 75), 0, 0, gocv.BorderDefault)
+				imgFace.Close()
 			}
 
 			jpegBuf, _ := gocv.IMEncode(".jpg", img)
+
 			d.Stream.UpdateJPEG(jpegBuf)
 		}
 	}(d)
